@@ -1,0 +1,8 @@
+{
+	"appId": "com.example.bodyregions",
+	"appName": "Body Regions",
+	"webDir": "dist",
+	"android": {
+		"androidScheme": "https"
+	}
+}
