@@ -1,9 +1,8 @@
-import { useRef, useState, useEffect, useCallback } from 'react';
-import type { PoseLandmarker } from '@mediapipe/tasks-vision';
-import { initPoseLandmarker } from '../lib/mediapipe';
-import { usePoseStore } from '../store/usePoseStore';
+import { useRef, useState, useEffect, useCallback } from "react";
+import type { PoseLandmarker } from "@mediapipe/tasks-vision";
+import { initPoseLandmarker } from "../lib/mediapipe";
+import { usePoseStore } from "../store/usePoseStore";
 
-// Increased interval slightly for better stability on mobile (approx 25 FPS)
 const DETECTION_INTERVAL_MS = 40;
 
 interface UsePoseLandmarkerReturn {
@@ -27,10 +26,9 @@ export function usePoseLandmarker(): UsePoseLandmarkerReturn {
 
   useEffect(() => {
     let cancelled = false;
-
     async function init() {
       try {
-        setStatus('loading');
+        setStatus("loading");
         const landmarker = await initPoseLandmarker();
         if (cancelled) {
           landmarker.close();
@@ -38,18 +36,19 @@ export function usePoseLandmarker(): UsePoseLandmarkerReturn {
         }
         landmarkerRef.current = landmarker;
         setIsReady(true);
-        setStatus('ready');
+        setStatus("ready");
       } catch (err) {
         if (!cancelled) {
-          const message = err instanceof Error ? err.message : 'Failed to initialize PoseLandmarker';
+          const message =
+            err instanceof Error
+              ? err.message
+              : "Failed to initialize PoseLandmarker";
           setError(message);
-          setStatus('error');
+          setStatus("error");
         }
       }
     }
-
     init();
-
     return () => {
       cancelled = true;
       landmarkerRef.current?.close();
@@ -57,47 +56,52 @@ export function usePoseLandmarker(): UsePoseLandmarkerReturn {
     };
   }, [setStatus]);
 
-  const detectFrame = useCallback(
-    (timestamp: number) => {
-      if (!landmarkerRef.current || !videoRef.current || videoRef.current.readyState < 2) {
-        rafIdRef.current = requestAnimationFrame(detectFrame);
-        return;
-      }
-
-      // Frame skipping logic
-      if (timestamp - lastDetectionTimeRef.current < DETECTION_INTERVAL_MS) {
-        rafIdRef.current = requestAnimationFrame(detectFrame);
-        return;
-      }
-
-      lastDetectionTimeRef.current = timestamp;
-
-      try {
-        const result = landmarkerRef.current.detectForVideo(videoRef.current, timestamp);
-
-        if (result.landmarks && result.landmarks.length > 0) {
-          setLandmarks(result.landmarks[0]);
-        } else {
-          clearLandmarks();
-        }
-      } catch (err) {
-        // Skip frame on error
-      }
-
+  const detectFrame = useCallback(() => {
+    // Safeguard: Ensure video is actually ready and has dimensions
+    if (
+      !landmarkerRef.current ||
+      !videoRef.current ||
+      videoRef.current.readyState < 2 ||
+      videoRef.current.videoWidth === 0
+    ) {
       rafIdRef.current = requestAnimationFrame(detectFrame);
-    },
-    [setLandmarks, clearLandmarks]
-  );
+      return;
+    }
+
+    // Use performance.now() to guarantee a strictly increasing timestamp.
+    const now = performance.now();
+    if (now - lastDetectionTimeRef.current < DETECTION_INTERVAL_MS) {
+      rafIdRef.current = requestAnimationFrame(detectFrame);
+      return;
+    }
+    lastDetectionTimeRef.current = now;
+
+    try {
+      const result = landmarkerRef.current.detectForVideo(
+        videoRef.current,
+        now,
+      );
+      if (result.landmarks && result.landmarks.length > 0) {
+        setLandmarks(result.landmarks[0]);
+      } else {
+        clearLandmarks();
+      }
+    } catch (err) {
+      // Skip frame on error
+    }
+
+    rafIdRef.current = requestAnimationFrame(detectFrame);
+  }, [setLandmarks, clearLandmarks]);
 
   const startDetection = useCallback(
     (video: HTMLVideoElement) => {
       if (!isReady) return;
       videoRef.current = video;
-      lastDetectionTimeRef.current = 0;
+      lastDetectionTimeRef.current = 0; // Reset timestamp to avoid frame skip issues on resume
       if (rafIdRef.current) cancelAnimationFrame(rafIdRef.current);
       rafIdRef.current = requestAnimationFrame(detectFrame);
     },
-    [isReady, detectFrame]
+    [isReady, detectFrame],
   );
 
   const stopDetection = useCallback(() => {
@@ -109,25 +113,9 @@ export function usePoseLandmarker(): UsePoseLandmarkerReturn {
     clearLandmarks();
   }, [clearLandmarks]);
 
-  useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (document.hidden) {
-        if (rafIdRef.current) {
-          cancelAnimationFrame(rafIdRef.current);
-          rafIdRef.current = 0;
-        }
-      } else if (videoRef.current && isReady) {
-        if (!rafIdRef.current) {
-            rafIdRef.current = requestAnimationFrame(detectFrame);
-        }
-      }
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, [isReady, detectFrame]);
+  // Note: The visibilitychange listener was removed.
+  // Lifecycle is now cleanly managed by useCamera toggling isActive,
+  // which triggers startDetection/stopDetection via CameraView.tsx.
 
   useEffect(() => {
     return () => {

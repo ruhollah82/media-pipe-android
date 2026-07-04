@@ -632,16 +632,7 @@ android {
             // Use default debug keystore
         }
         release {
-            // Generate a keystore for release builds:
-            // keytool -genkey -v -keystore body-regions.keystore -alias body-regions -keyalg RSA -keysize 2048 -validity 10000
-            //
-            // Then set these values or use environment variables:
-            // storeFile file("body-regions.keystore")
-            // storePassword System.getenv("KEYSTORE_PASSWORD") ?: ""
-            // keyAlias "body-regions"
-            // keyPassword System.getenv("KEY_PASSWORD") ?: ""
-            
-            // For now, use debug signing for release (not recommended for production)
+            // For now, use debug signing for release
             storeFile file("${System.getProperty('user.home')}/.android/debug.keystore")
             storePassword "android"
             keyAlias "androiddebugkey"
@@ -651,12 +642,10 @@ android {
 
     buildTypes {
         debug {
-            // Debug build - no minification
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
         release {
-            // Release build with minification
             minifyEnabled true
             shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
@@ -664,13 +653,11 @@ android {
         }
     }
 
-    // Optimize compilation
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
     }
 
-    // Bundle optimization
     bundle {
         language {
             enableSplit = false
@@ -693,6 +680,9 @@ repositories {
 dependencies {
     implementation fileTree(include: ['*.jar'], dir: 'libs')
     implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
+    implementation "androidx.activity:activity:$androidxActivityVersion"
+    implementation "androidx.fragment:fragment:$androidxFragmentVersion"
+    implementation "androidx.webkit:webkit:$androidxWebkitVersion"
     implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
     implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
     implementation project(':capacitor-android')
@@ -710,7 +700,7 @@ try {
         apply plugin: 'com.google.gms.google-services'
     }
 } catch(Exception e) {
-    logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
+    logger.info("google-services.json not found, google-services plugin not applied.")
 }
 </file>
 
@@ -963,6 +953,7 @@ buildscript {
     repositories {
         google()
         mavenCentral()
+        maven { url 'https://maven.myket.ir' }
     }
     dependencies {
         classpath 'com.android.tools.build:gradle:8.13.0'
@@ -979,6 +970,7 @@ allprojects {
     repositories {
         google()
         mavenCentral()
+        maven { url 'https://maven.myket.ir' }
     }
 }
 
@@ -1016,9 +1008,6 @@ org.gradle.parallel=true
 # Android operating system, and which are packaged with your app's APK
 # https://developer.android.com/topic/libraries/support-library/androidx-rn
 android.useAndroidX=true
-
-# Enable build cache for faster rebuilds
-android.enableBuildCache=true
 
 # Enable R8 full mode for better optimization
 android.enableR8.fullMode=true
@@ -1379,6 +1368,24 @@ if "%OS%"=="Windows_NT" endlocal
 </file>
 
 <file path="android/settings.gradle">
+pluginManagement {
+    repositories {
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+        maven { url = uri("https://maven.myket.ir") }
+    }
+}
+
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.PREFER_PROJECT)
+    repositories {
+        google()
+        mavenCentral()
+        maven { url = uri("https://maven.myket.ir") }
+    }
+}
+
 include ':app'
 include ':capacitor-cordova-android-plugins'
 project(':capacitor-cordova-android-plugins').projectDir = new File('./capacitor-cordova-android-plugins/')
@@ -1389,18 +1396,18 @@ apply from: 'capacitor.settings.gradle'
 <file path="android/variables.gradle">
 ext {
     minSdkVersion = 28
-    compileSdkVersion = 34
-    targetSdkVersion = 34
-    androidxActivityVersion = '1.11.0'
+    compileSdkVersion = 35
+    targetSdkVersion = 35
+    androidxActivityVersion = '1.9.3'
     androidxAppCompatVersion = '1.7.1'
     androidxCoordinatorLayoutVersion = '1.3.0'
-    androidxCoreVersion = '1.17.0'
-    androidxFragmentVersion = '1.8.9'
+    androidxCoreVersion = '1.15.0'
+    androidxFragmentVersion = '1.8.5'
     coreSplashScreenVersion = '1.2.0'
-    androidxWebkitVersion = '1.14.0'
+    androidxWebkitVersion = '1.12.1'
     junitVersion = '4.13.2'
-    androidxJunitVersion = '1.3.0'
-    androidxEspressoCoreVersion = '3.7.0'
+    androidxJunitVersion = '1.2.1'
+    androidxEspressoCoreVersion = '3.6.1'
     cordovaAndroidVersion = '14.0.1'
 }
 </file>
@@ -19094,27 +19101,53 @@ if (typeof exports === 'object' && typeof module === 'object') {
 </file>
 
 <file path="src/components/CameraView.tsx">
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, memo } from 'react';
 import { useCamera } from '../hooks/useCamera';
 import { usePoseLandmarker } from '../hooks/usePoseLandmarker';
 import { usePoseStore } from '../store/usePoseStore';
 import { PoseCanvas } from './PoseCanvas';
 
+// Small component to display landmark count without re-rendering the whole CameraView
+const LandmarkBadge = memo(() => {
+  const hasLandmarks = usePoseStore((s) => s.landmarks !== null);
+  const count = usePoseStore((s) => s.landmarks?.length || 0);
+
+  if (!hasLandmarks) return null;
+
+  return (
+    <div className="flex items-center justify-center mb-3">
+      <div className="glass rounded-full px-4 py-2 flex items-center gap-3">
+        <div className="flex items-center gap-1.5">
+          <svg className="w-4 h-4 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+          </svg>
+          <span className="text-white/90 text-sm font-medium">{count} points</span>
+        </div>
+        <div className="w-px h-4 bg-white/20" />
+        <div className="flex items-center gap-1.5">
+          <svg className="w-4 h-4 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <span className="text-white/90 text-sm font-medium">Live</span>
+        </div>
+      </div>
+    </div>
+  );
+});
+
 export function CameraView() {
   const { videoRef, isActive, error: cameraError, start } = useCamera();
   const { isReady, error: poseError, startDetection, stopDetection } = usePoseLandmarker();
   const status = usePoseStore((s) => s.status);
-  const landmarks = usePoseStore((s) => s.landmarks);
   const detectionStartedRef = useRef(false);
   const [fps, setFps] = useState(0);
-  const fpsRef = useRef({ frames: 0, lastTime: performance.now() });
 
   // Start camera on mount
   useEffect(() => {
     start();
   }, [start]);
 
-  // Start detection when both camera and PoseLandmarker are ready
+  // Start detection when ready
   useEffect(() => {
     if (isReady && isActive && videoRef.current && !detectionStartedRef.current) {
       detectionStartedRef.current = true;
@@ -19130,143 +19163,96 @@ export function CameraView() {
     }
   }, [isActive, stopDetection]);
 
-  // FPS counter
+  // Optimized FPS counter
   useEffect(() => {
     if (!isActive) return;
-
-    const interval = setInterval(() => {
-      const now = performance.now();
-      const elapsed = now - fpsRef.current.lastTime;
-      if (elapsed >= 1000) {
-        setFps(Math.round((fpsRef.current.frames * 1000) / elapsed));
-        fpsRef.current.frames = 0;
-        fpsRef.current.lastTime = now;
-      }
-    }, 100);
+    let frames = 0;
+    let lastTime = performance.now();
+    let rafId: number;
 
     const countFrame = () => {
-      fpsRef.current.frames++;
-      requestAnimationFrame(countFrame);
+      frames++;
+      const now = performance.now();
+      if (now - lastTime >= 1000) {
+        setFps(Math.round((frames * 1000) / (now - lastTime)));
+        frames = 0;
+        lastTime = now;
+      }
+      rafId = requestAnimationFrame(countFrame);
     };
-    const rafId = requestAnimationFrame(countFrame);
+    rafId = requestAnimationFrame(countFrame);
 
-    return () => {
-      clearInterval(interval);
-      cancelAnimationFrame(rafId);
-    };
+    return () => cancelAnimationFrame(rafId);
   }, [isActive]);
 
   const error = cameraError || poseError;
+  const isDetecting = status === 'ready' && isActive;
 
   return (
-    <div className="relative w-full h-screen bg-black overflow-hidden select-none">
-      {/* Camera video feed */}
+    <div className="relative w-full h-full bg-black overflow-hidden select-none">
       <video
         ref={videoRef}
         autoPlay
         playsInline
         muted
         className="absolute inset-0 w-full h-full object-cover"
-        style={{ transform: 'scaleX(-1)' }} // Mirror for front camera
+        style={{ transform: 'scaleX(-1)' }}
       />
 
-      {/* Pose overlay canvas */}
       <PoseCanvas />
 
-      {/* Status indicator */}
-      <div className="absolute top-4 left-4 z-20">
-        <div
-          className={`px-3 py-1.5 rounded-full text-xs font-semibold backdrop-blur-sm ${
-            status === 'ready' && isActive
-              ? 'bg-green-500/80 text-white'
-              : status === 'loading'
-                ? 'bg-yellow-500/80 text-white'
-                : status === 'error'
-                  ? 'bg-red-500/80 text-white'
-                  : 'bg-gray-500/80 text-white'
-          }`}
-        >
-          {status === 'ready' && isActive
-            ? '● Detecting'
-            : status === 'loading'
-              ? '◌ Loading...'
-              : status === 'error'
-                ? '✕ Error'
-                : '◌ Init...'}
+      {/* Overlays (Static mostly) */}
+      <div className="absolute top-0 left-0 right-0 h-32 gradient-top pointer-events-none z-10" />
+      <div className="absolute bottom-0 left-0 right-0 h-40 gradient-bottom pointer-events-none z-10" />
+
+      {/* Top status bar */}
+      <div className="absolute top-0 left-0 right-0 safe-area-top z-20">
+        <div className="flex items-center justify-between px-4 pt-3 pb-2">
+          <div className="flex items-center gap-2">
+            <div className={`w-2 h-2 rounded-full ${isDetecting ? 'bg-green-400' : 'bg-amber-400'}`} />
+            <span className="text-white/90 text-xs font-medium tracking-wide">
+              {isDetecting ? 'TRACKING' : status.toUpperCase()}
+            </span>
+          </div>
+
+          {isDetecting && (
+            <div className="glass-light rounded-full px-3 py-1">
+              <span className="text-white/80 text-xs font-mono">{fps} FPS</span>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* FPS and landmarks count */}
-      {isActive && status === 'ready' && (
-        <div className="absolute top-4 right-4 z-20">
-          <div className="px-3 py-1.5 rounded-full text-xs font-mono bg-black/50 text-white backdrop-blur-sm">
-            {fps} FPS · {landmarks ? landmarks.length : 0} pts
-          </div>
+      {/* Bottom info panel */}
+      <div className="absolute bottom-0 left-0 right-0 safe-area-bottom z-20">
+        <div className="px-4 pb-4">
+          <LandmarkBadge />
+
+          {error && (
+            <div className="glass rounded-2xl p-4 mb-3 border border-red-500/30">
+              <div className="flex items-start gap-3">
+                <div className="flex-1 min-w-0">
+                  <p className="text-white font-medium text-sm">Error</p>
+                  <p className="text-white/60 text-xs mt-0.5 truncate">{error}</p>
+                </div>
+                <button onClick={start} className="px-3 py-1.5 bg-white/10 rounded-lg text-white text-xs">Retry</button>
+              </div>
+            </div>
+          )}
+
+          {!isActive && !cameraError && (
+            <div className="glass rounded-2xl p-6 text-center">
+              <h3 className="text-white font-semibold text-lg mb-1">Camera Access Required</h3>
+              <button
+                onClick={start}
+                className="w-full mt-4 py-3 bg-blue-500 text-white rounded-xl font-semibold text-sm"
+              >
+                Enable Camera
+              </button>
+            </div>
+          )}
         </div>
-      )}
-
-      {/* Error display */}
-      {error && (
-        <div className="absolute bottom-20 left-4 right-4 z-20 bg-red-500/90 text-white p-4 rounded-xl text-sm backdrop-blur-sm">
-          <p className="font-semibold mb-1">Error</p>
-          <p className="text-red-100">{error}</p>
-        </div>
-      )}
-
-      {/* Camera not active hint */}
-      {!isActive && !cameraError && (
-        <div className="absolute inset-0 flex items-center justify-center z-20 bg-black/70">
-          <div className="text-white text-center px-8">
-            <div className="text-6xl mb-4">📷</div>
-            <p className="text-xl font-semibold mb-2">Camera Access Required</p>
-            <p className="text-sm text-gray-300 mb-4">
-              Please allow camera permission when prompted
-            </p>
-            <button
-              onClick={start}
-              className="px-6 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-sm font-medium transition-colors"
-            >
-              Try Again
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Loading model overlay */}
-      {isActive && status === 'loading' && (
-        <div className="absolute inset-0 flex items-center justify-center z-20 bg-black/50">
-          <div className="text-white text-center">
-            <div className="animate-spin w-12 h-12 border-4 border-white/30 border-t-white rounded-full mx-auto mb-4" />
-            <p className="text-lg font-medium">Loading Pose Detection Model...</p>
-            <p className="text-sm text-gray-300 mt-1">This may take a moment on first load</p>
-          </div>
-        </div>
-      )}
-
-      {/* Instructions overlay (shown briefly) */}
-      <InstructionsOverlay />
-    </div>
-  );
-}
-
-function InstructionsOverlay() {
-  const [show, setShow] = useState(true);
-
-  useEffect(() => {
-    const timer = setTimeout(() => setShow(false), 5000);
-    return () => clearTimeout(timer);
-  }, []);
-
-  if (!show) return null;
-
-  return (
-    <div className="absolute bottom-4 left-4 right-4 z-20 bg-black/70 text-white p-4 rounded-xl text-sm backdrop-blur-sm animate-fade-in">
-      <p className="font-medium mb-1">How to use:</p>
-      <ul className="text-gray-300 space-y-1">
-        <li>• Stand in view of the camera</li>
-        <li>• Body regions will be detected automatically</li>
-        <li>• Works best with good lighting</li>
-      </ul>
+      </div>
     </div>
   );
 }
@@ -19279,156 +19265,127 @@ import { POSE_CONNECTIONS } from '../lib/pose-connections';
 import { BODY_REGIONS, LABELED_LANDMARKS } from '../lib/body-regions';
 import type { NormalizedLandmark } from '../types';
 
-const LANDMARK_COLOR = '#00FF00';
-const SKELETON_COLOR = '#00FFFF';
+const LANDMARK_COLOR = '#22c55e';
+const SKELETON_COLOR = '#06b6d4';
 const LABEL_COLOR = '#FFFFFF';
-const LABEL_BG = 'rgba(0, 0, 0, 0.6)';
-const POINT_RADIUS = 4;
+const LABEL_BG = 'rgba(0, 0, 0, 0.8)';
+const POINT_RADIUS = 3.5;
 const LINE_WIDTH = 2;
 const VISIBILITY_THRESHOLD = 0.5;
 
 export function PoseCanvas() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const ctxRef = useRef<CanvasRenderingContext2D | null>(null);
-  const lastLandmarksRef = useRef<NormalizedLandmark[] | null>(null);
+  const landmarksRef = useRef<NormalizedLandmark[] | null>(null);
   const rafIdRef = useRef<number>(0);
-  const isRenderingRef = useRef<boolean>(false);
 
-  const landmarks = usePoseStore((s) => s.landmarks);
-
-  // Cache canvas context with optimal settings
+  // 1. Initialize Context with performance hints
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    
     ctxRef.current = canvas.getContext('2d', {
-      willReadFrequently: false,
       alpha: true,
-      desynchronized: true, // Reduce latency on supported devices
+      desynchronized: true, // Reduce latency in supported browsers
     });
   }, []);
 
-  // Optimized render function
-  const render = useCallback(() => {
+  // 2. Subscribe to store changes OUTSIDE of React render cycle
+  useEffect(() => {
+    const unsubscribe = usePoseStore.subscribe((state) => {
+      landmarksRef.current = state.landmarks;
+    });
+    return unsubscribe;
+  }, []);
+
+  // 3. Optimized Draw Function
+  const draw = useCallback(() => {
     const ctx = ctxRef.current;
     const canvas = canvasRef.current;
-    const landmarks = lastLandmarksRef.current;
-    
+    const landmarks = landmarksRef.current;
+
     if (!ctx || !canvas) return;
 
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    if (!landmarks || landmarks.length === 0) return;
+
     const { width, height } = canvas;
-    if (width === 0 || height === 0) return;
+    const mirrorX = (x: number) => (1 - x) * width;
 
-    // Clear canvas
-    ctx.clearRect(0, 0, width, height);
-
-    if (!landmarks) return;
-
-    // Batch style changes
-    ctx.lineWidth = LINE_WIDTH;
-    ctx.font = '12px monospace';
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'middle';
-
-    // Draw skeleton first (behind landmarks)
+    // Draw Skeleton
     ctx.strokeStyle = SKELETON_COLOR;
+    ctx.lineWidth = LINE_WIDTH;
+    ctx.lineCap = 'round';
     ctx.beginPath();
     for (const [i, j] of POSE_CONNECTIONS) {
       const a = landmarks[i];
       const b = landmarks[j];
-      if (!a || !b) continue;
-      if (a.visibility < VISIBILITY_THRESHOLD || b.visibility < VISIBILITY_THRESHOLD) continue;
-
-      ctx.moveTo(a.x * width, a.y * height);
-      ctx.lineTo(b.x * width, b.y * height);
+      if (a?.visibility > VISIBILITY_THRESHOLD && b?.visibility > VISIBILITY_THRESHOLD) {
+        ctx.moveTo(mirrorX(a.x), a.y * height);
+        ctx.lineTo(mirrorX(b.x), b.y * height);
+      }
     }
     ctx.stroke();
 
-    // Draw landmarks
+    // Draw Points
     ctx.fillStyle = LANDMARK_COLOR;
     ctx.beginPath();
     for (const lm of landmarks) {
-      if (lm.visibility < VISIBILITY_THRESHOLD) continue;
-      const x = lm.x * width;
-      const y = lm.y * height;
-      ctx.moveTo(x + POINT_RADIUS, y);
-      ctx.arc(x, y, POINT_RADIUS, 0, 2 * Math.PI);
+      if (lm.visibility > VISIBILITY_THRESHOLD) {
+        const x = mirrorX(lm.x);
+        const y = lm.y * height;
+        ctx.moveTo(x + POINT_RADIUS, y);
+        ctx.arc(x, y, POINT_RADIUS, 0, 2 * Math.PI);
+      }
     }
     ctx.fill();
 
-    // Draw labels
+    // Draw Labels (Simplified for performance)
+    ctx.font = '600 10px sans-serif';
+    ctx.fillStyle = LABEL_COLOR;
     for (const idx of LABELED_LANDMARKS) {
       const lm = landmarks[idx];
-      if (!lm || lm.visibility < VISIBILITY_THRESHOLD) continue;
+      if (lm?.visibility > VISIBILITY_THRESHOLD) {
+        const label = BODY_REGIONS[idx];
+        const x = mirrorX(lm.x) + 8;
+        const y = lm.y * height;
 
-      const label = BODY_REGIONS[idx];
-      if (!label) continue;
-
-      const x = lm.x * width;
-      const y = lm.y * height;
-      const textWidth = ctx.measureText(label).width;
-
-      // Draw background
-      ctx.fillStyle = LABEL_BG;
-      ctx.fillRect(x + 6, y - 8, textWidth + 8, 16);
-
-      // Draw text
-      ctx.fillStyle = LABEL_COLOR;
-      ctx.fillText(label, x + 10, y);
+        ctx.fillStyle = LABEL_BG;
+        ctx.fillRect(x - 2, y - 7, label.length * 6 + 4, 14);
+        ctx.fillStyle = LABEL_COLOR;
+        ctx.fillText(label, x, y + 3);
+      }
     }
   }, []);
 
-  // Render loop with proper cleanup
+  // 4. Constant Animation Loop
   useEffect(() => {
-    lastLandmarksRef.current = landmarks;
-
-    if (!isRenderingRef.current) {
-      isRenderingRef.current = true;
-      
-      const loop = () => {
-        render();
-        rafIdRef.current = requestAnimationFrame(loop);
-      };
-      
+    const loop = () => {
+      draw();
       rafIdRef.current = requestAnimationFrame(loop);
-    }
-
-    return () => {
-      if (rafIdRef.current) {
-        cancelAnimationFrame(rafIdRef.current);
-        rafIdRef.current = 0;
-        isRenderingRef.current = false;
-      }
     };
-  }, [landmarks, render]);
+    rafIdRef.current = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(rafIdRef.current);
+  }, [draw]);
 
-  // Sync canvas dimensions from parent video element
+  // 5. Dimension Sync
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    const video = canvas?.parentElement?.querySelector('video');
+    if (!canvas || !video) return;
 
-    const parent = canvas.parentElement;
-    if (!parent) return;
-
-    const video = parent.querySelector('video');
-    if (!video) return;
-
-    const syncDimensions = () => {
-      if (video.videoWidth > 0 && video.videoHeight > 0) {
-        if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
-          canvas.width = video.videoWidth;
-          canvas.height = video.videoHeight;
-        }
+    const sync = () => {
+      if (video.videoWidth && (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight)) {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
       }
     };
 
-    video.addEventListener('loadedmetadata', syncDimensions);
-    // Also check periodically in case metadata loads late
-    const interval = setInterval(syncDimensions, 500);
-
+    const interval = setInterval(sync, 1000);
+    video.addEventListener('loadedmetadata', sync);
     return () => {
-      video.removeEventListener('loadedmetadata', syncDimensions);
       clearInterval(interval);
+      video.removeEventListener('loadedmetadata', sync);
     };
   }, []);
 
@@ -19436,7 +19393,7 @@ export function PoseCanvas() {
     <canvas
       ref={canvasRef}
       className="absolute inset-0 w-full h-full pointer-events-none"
-      style={{ zIndex: 10 }}
+      style={{ zIndex: 10, willChange: 'transform' }}
     />
   );
 }
@@ -19463,11 +19420,13 @@ export function useCamera(): UseCameraReturn {
     try {
       setError(null);
 
+      // Reduced resolution for better performance on mobile devices
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
           facingMode: 'user',
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
+          width: { ideal: 640 },
+          height: { ideal: 480 },
+          frameRate: { ideal: 30 }
         },
         audio: false,
       });
@@ -19497,18 +19456,15 @@ export function useCamera(): UseCameraReturn {
     setIsActive(false);
   }, []);
 
-  // Handle visibility changes (pause/resume camera when app backgrounds)
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (!streamRef.current) return;
 
       if (document.hidden) {
-        // Pause camera tracks
         streamRef.current.getTracks().forEach((track) => {
           track.enabled = false;
         });
       } else {
-        // Resume camera tracks
         streamRef.current.getTracks().forEach((track) => {
           track.enabled = true;
         });
@@ -19521,7 +19477,6 @@ export function useCamera(): UseCameraReturn {
     };
   }, []);
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
       stop();
@@ -19538,7 +19493,8 @@ import type { PoseLandmarker } from '@mediapipe/tasks-vision';
 import { initPoseLandmarker } from '../lib/mediapipe';
 import { usePoseStore } from '../store/usePoseStore';
 
-const DETECTION_INTERVAL_MS = 33; // ~30fps detection rate
+// Increased interval slightly for better stability on mobile (approx 25 FPS)
+const DETECTION_INTERVAL_MS = 40;
 
 interface UsePoseLandmarkerReturn {
   isReady: boolean;
@@ -19559,7 +19515,6 @@ export function usePoseLandmarker(): UsePoseLandmarkerReturn {
   const setStatus = usePoseStore((s) => s.setStatus);
   const clearLandmarks = usePoseStore((s) => s.clearLandmarks);
 
-  // Initialize PoseLandmarker on mount
   useEffect(() => {
     let cancelled = false;
 
@@ -19594,9 +19549,12 @@ export function usePoseLandmarker(): UsePoseLandmarkerReturn {
 
   const detectFrame = useCallback(
     (timestamp: number) => {
-      if (!landmarkerRef.current || !videoRef.current) return;
+      if (!landmarkerRef.current || !videoRef.current || videoRef.current.readyState < 2) {
+        rafIdRef.current = requestAnimationFrame(detectFrame);
+        return;
+      }
 
-      // Frame skipping: only detect every DETECTION_INTERVAL_MS
+      // Frame skipping logic
       if (timestamp - lastDetectionTimeRef.current < DETECTION_INTERVAL_MS) {
         rafIdRef.current = requestAnimationFrame(detectFrame);
         return;
@@ -19612,8 +19570,8 @@ export function usePoseLandmarker(): UsePoseLandmarkerReturn {
         } else {
           clearLandmarks();
         }
-      } catch {
-        // Detection error — skip this frame, continue loop
+      } catch (err) {
+        // Skip frame on error
       }
 
       rafIdRef.current = requestAnimationFrame(detectFrame);
@@ -19626,6 +19584,7 @@ export function usePoseLandmarker(): UsePoseLandmarkerReturn {
       if (!isReady) return;
       videoRef.current = video;
       lastDetectionTimeRef.current = 0;
+      if (rafIdRef.current) cancelAnimationFrame(rafIdRef.current);
       rafIdRef.current = requestAnimationFrame(detectFrame);
     },
     [isReady, detectFrame]
@@ -19640,7 +19599,6 @@ export function usePoseLandmarker(): UsePoseLandmarkerReturn {
     clearLandmarks();
   }, [clearLandmarks]);
 
-  // Pause detection when app backgrounds, resume when foreground
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.hidden) {
@@ -19649,7 +19607,9 @@ export function usePoseLandmarker(): UsePoseLandmarkerReturn {
           rafIdRef.current = 0;
         }
       } else if (videoRef.current && isReady) {
-        rafIdRef.current = requestAnimationFrame(detectFrame);
+        if (!rafIdRef.current) {
+            rafIdRef.current = requestAnimationFrame(detectFrame);
+        }
       }
     };
 
@@ -19659,7 +19619,6 @@ export function usePoseLandmarker(): UsePoseLandmarkerReturn {
     };
   }, [isReady, detectFrame]);
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
       stopDetection();
@@ -19732,35 +19691,15 @@ import { PoseLandmarker, FilesetResolver } from '@mediapipe/tasks-vision';
 const WASM_PATH = '/wasm';
 const MODEL_PATH = '/models/pose_landmarker_lite.task';
 
-// Detect SIMD support for optimal WASM binary selection
-function supportsSimd(): boolean {
-  try {
-    // WebAssembly SIMD detection
-    return typeof WebAssembly === 'object' && 
-           typeof WebAssembly.validate === 'function' &&
-           WebAssembly.validate(
-             new Uint8Array([
-               0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00,
-               0x01, 0x05, 0x01, 0x60, 0x00, 0x01, 0x7b, 0x03,
-               0x02, 0x01, 0x00, 0x0a, 0x0a, 0x01, 0x08, 0x00,
-               0x41, 0x00, 0xfd, 0x0f, 0x1a, 0x0b
-             ])
-           );
-  } catch {
-    return false;
-  }
-}
-
 export async function initPoseLandmarker(): Promise<PoseLandmarker> {
-  // Use SIMD version if supported, fallback to non-SIMD
-  const wasmPath = supportsSimd() ? WASM_PATH : WASM_PATH;
-  
-  const vision = await FilesetResolver.forVisionTasks(wasmPath);
+  const vision = await FilesetResolver.forVisionTasks(WASM_PATH);
 
   const poseLandmarker = await PoseLandmarker.createFromOptions(vision, {
     baseOptions: {
       modelAssetPath: MODEL_PATH,
-      delegate: 'GPU',
+      // Switching to 'CPU' (WASM SIMD) is often much more stable in Android WebViews
+      // because it avoids the overhead of GPU buffer transfers.
+      delegate: 'CPU',
     },
     runningMode: 'VIDEO',
     numPoses: 1,
@@ -19883,6 +19822,7 @@ export default App;
   margin: 0;
   padding: 0;
   box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
 }
 
 html, body, #root {
@@ -19890,7 +19830,21 @@ html, body, #root {
   height: 100%;
   overflow: hidden;
   background: #000;
-  font-family: system-ui, -apple-system, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Safe area support for notched devices */
+.safe-area-top {
+  padding-top: env(safe-area-inset-top);
+}
+
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
 }
 
 /* Fade in animation */
@@ -19905,8 +19859,38 @@ html, body, #root {
   }
 }
 
+/* Slide up animation */
+@keyframes slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Pulse animation for status indicator */
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(34, 197, 94, 0);
+  }
+}
+
 .animate-fade-in {
   animation: fade-in 0.3s ease-out;
+}
+
+.animate-slide-up {
+  animation: slide-up 0.4s ease-out;
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
 }
 
 /* Smooth transitions */
@@ -19914,15 +19898,28 @@ video {
   transition: opacity 0.3s ease;
 }
 
-/* Loading spinner animation */
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
+/* Glass morphism effect */
+.glass {
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-.animate-spin {
-  animation: spin 1s linear infinite;
+.glass-light {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+/* Gradient overlays */
+.gradient-top {
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.6) 0%, transparent 100%);
+}
+
+.gradient-bottom {
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.7) 0%, transparent 100%);
 }
 </file>
 
@@ -20012,8 +20009,18 @@ export default defineConfig([
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no" />
-    <title>Body Region Detection</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <meta name="theme-color" content="#000000" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <title>Body Regions</title>
+    <style>
+      /* Prevent pull-to-refresh and overscroll */
+      html, body {
+        overscroll-behavior: none;
+        overflow: hidden;
+      }
+    </style>
   </head>
   <body>
     <div id="root"></div>

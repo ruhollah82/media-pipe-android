@@ -1,4 +1,5 @@
-import { useRef, useState, useEffect, useCallback } from 'react';
+import { useRef, useState, useEffect, useCallback } from "react";
+import { App } from "@capacitor/app"; // Import Capacitor's App plugin
 
 interface UseCameraReturn {
   videoRef: React.RefObject<HTMLVideoElement | null>;
@@ -17,27 +18,24 @@ export function useCamera(): UseCameraReturn {
   const start = useCallback(async () => {
     try {
       setError(null);
-
-      // Reduced resolution for better performance on mobile devices
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
-          facingMode: 'user',
+          facingMode: "user",
           width: { ideal: 640 },
           height: { ideal: 480 },
-          frameRate: { ideal: 30 }
+          frameRate: { ideal: 30 },
         },
         audio: false,
       });
-
       streamRef.current = stream;
-
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         await videoRef.current.play();
         setIsActive(true);
       }
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to access camera';
+      const message =
+        err instanceof Error ? err.message : "Failed to access camera";
       setError(message);
       setIsActive(false);
     }
@@ -50,30 +48,28 @@ export function useCamera(): UseCameraReturn {
     }
     if (videoRef.current) {
       videoRef.current.srcObject = null;
+      videoRef.current.load(); // Force reset the video decoder to clear frozen states
     }
     setIsActive(false);
   }, []);
 
   useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (!streamRef.current) return;
-
-      if (document.hidden) {
-        streamRef.current.getTracks().forEach((track) => {
-          track.enabled = false;
-        });
+    // Use Capacitor's native lifecycle instead of document.visibilitychange
+    const listener = App.addListener("appStateChange", async ({ isActive }) => {
+      if (!isActive) {
+        // App went to background: completely tear down the camera
+        stop();
       } else {
-        streamRef.current.getTracks().forEach((track) => {
-          track.enabled = true;
-        });
+        // App came to foreground: completely restart the camera
+        // This avoids the Android WebView video-freeze bug entirely
+        await start();
       }
-    };
+    });
 
-    document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      listener.then((l) => l.remove());
     };
-  }, []);
+  }, [start, stop]);
 
   useEffect(() => {
     return () => {
