@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Body Regions</string>
+    <string name="title_activity_main">Body Region Detection</string>
+    <string name="package_name">com.example.bodyregions</string>
+    <string name="custom_url_scheme">com.example.bodyregions</string>
+</resources>
